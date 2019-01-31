@@ -2760,6 +2760,9 @@ struct mg_connection {
 #if defined(USE_LUA) && defined(USE_WEBSOCKET)
 	void *lua_websocket_state; /* Lua_State for a websocket connection */
 #endif
+
+    char *additional_header;   /* Additional headers to be sent with
+                                * the next reply */
 };
 
 
@@ -4312,6 +4315,12 @@ send_additional_header(struct mg_connection *conn)
 		i += mg_printf(conn, "%s\r\n", header);
 	}
 
+    if (conn->additional_header && conn->additional_header[0]) {
+        i += mg_printf(conn, "%s\r\n", conn->additional_header);
+        mg_free((void *)conn->additional_header);
+        conn->additional_header = NULL;
+    }
+
 	return i;
 }
 
@@ -4695,6 +4704,19 @@ mg_send_http_error_impl(struct mg_connection *conn,
 	return 0;
 }
 
+void
+mg_set_additional_header(struct mg_connection *conn, const char *header)
+{
+    if (header && header[0]) {
+        /* Make a copy of the header string. */
+        conn->additional_header = strdup(header);
+    } else if (conn->additional_header) {
+        /* If NULL or zero-length string is specified, delete
+         * the existing additional header if there is one. */
+        mg_free((void *)conn->additional_header);
+        conn->additional_header = 0;
+    }
+}
 
 int
 mg_send_http_error(struct mg_connection *conn, int status, const char *fmt, ...)
@@ -16365,6 +16387,11 @@ close_connection(struct mg_connection *conn)
 		mg_free((void *)conn->host);
 		conn->host = NULL;
 	}
+
+    if (conn->additional_header) {
+        mg_free((void *)conn->additional_header);
+        conn->additional_header = NULL;
+    }
 
 	mg_unlock_connection(conn);
 

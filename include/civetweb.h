@@ -902,6 +902,15 @@ CIVETWEB_API void mg_send_file(struct mg_connection *conn, const char *path);
 CIVETWEB_API int mg_send_file_body(struct mg_connection *conn,
                                    const char *path);
 
+/* Set additional header(s) to be sent with the next reply.
+ *
+ * Parameters:
+ *   conn:   Current connection information.
+ *   header: Additional header to be sent. Multiple headers can be specified
+ *           if they are separated with "\r\n" pairs.
+ */
+CIVETWEB_API void mg_set_additional_header(struct mg_connection *conn,
+                                           const char *header);
 
 /* Send HTTP error reply. */
 CIVETWEB_API int mg_send_http_error(struct mg_connection *conn,

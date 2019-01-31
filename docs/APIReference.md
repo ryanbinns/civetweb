@@ -69,6 +69,7 @@ The content of both structures is not defined in the interface - they are only u
 
 * [`mg_get_context( conn );`](api/mg_get_context.md)
 
+* [`mg_set_additional_header( conn, header );`](api/mg_set_additional_header.md)
 * [`mg_send_http_error( conn, status_code, fmt, ... );`](api/mg_send_http_error.md)
 * [`mg_send_http_ok( conn, mime_type, content_length );`](api/mg_send_http_ok.md)
 * [`mg_send_http_redirect( conn, target_url, redirect_code );`](api/mg_send_http_redirect.md)
