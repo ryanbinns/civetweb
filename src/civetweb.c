@@ -4709,7 +4709,7 @@ mg_set_additional_header(struct mg_connection *conn, const char *header)
 {
     if (header && header[0]) {
         /* Make a copy of the header string. */
-        conn->additional_header = strdup(header);
+        conn->additional_header = mg_strdup(header);
     } else if (conn->additional_header) {
         /* If NULL or zero-length string is specified, delete
          * the existing additional header if there is one. */
