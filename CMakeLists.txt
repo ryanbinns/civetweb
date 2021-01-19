@@ -8,12 +8,29 @@ if (${CMAKE_VERSION} VERSION_GREATER 3.1 OR
   cmake_policy(SET CMP0054 NEW)
 endif()
 
+# Set up the project
+project (civetweb)
+
+# Detect the platform reliably
+if(ZEPHYR_BASE)
+    if (NOT CONFIG_CIVETWEB)
+      return()
+    endif()
+    SET(ZEPHYR YES)
+elseif(NOT MACOSX AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    SET(DARWIN YES)
+elseif(NOT BSD AND ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+    SET(FREEBSD YES)
+elseif(NOT LINUX AND ${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    SET(LINUX YES)
+endif()
+
 # Do not allow in source builds
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
 # Make sure we can import out CMake functions
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 # Load in the needed CMake modules
 include(CheckIncludeFiles)
@@ -24,9 +41,7 @@ include(AddCXXCompilerFlag)
 include(DetermineTargetArchitecture)
 include(CMakeDependentOption)
 
-# Set up the project
-project (civetweb)
-set(CIVETWEB_VERSION "1.11.0" CACHE STRING "The version of the civetweb library")
+set(CIVETWEB_VERSION "1.14.0" CACHE STRING "The version of the civetweb library")
 string(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" CIVETWEB_VERSION_MATCH "${CIVETWEB_VERSION}")
 if ("${CIVETWEB_VERSION_MATCH}" STREQUAL "")
   message(FATAL_ERROR "Must specify a semantic version: major.minor.patch")
@@ -36,15 +51,6 @@ set(CIVETWEB_VERSION_MINOR "${CMAKE_MATCH_2}")
 set(CIVETWEB_VERSION_PATCH "${CMAKE_MATCH_3}")
 determine_target_architecture(CIVETWEB_ARCHITECTURE)
 include(GNUInstallDirs)
-
-# Detect the platform reliably
-if(NOT MACOSX AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-   SET(DARWIN YES)
-elseif(NOT BSD AND ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-    SET(FREEBSD YES)
-elseif(NOT LINUX AND ${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    SET(LINUX YES)
-endif()
 
 # CTest automation
 option(CIVETWEB_BUILD_TESTING "Enable automated testing of civetweb" ON)
@@ -213,8 +219,12 @@ message(STATUS "Duktape CGI support - ${CIVETWEB_ENABLE_DUKTAPE}")
 option(CIVETWEB_ENABLE_SSL "Enables the secure socket layer" ON)
 message(STATUS "SSL support - ${CIVETWEB_ENABLE_SSL}")
 
+# OpenSSL 1.0 API
+option(CIVETWEB_SSL_OPENSSL_API_1_0 "Use the OpenSSL 1.0 API" OFF)
+message(STATUS "Compile for OpenSSL 1.0 API - ${CIVETWEB_SSL_OPENSSL_API_1_0}")
+
 # OpenSSL 1.1 API
-option(CIVETWEB_SSL_OPENSSL_API_1_1 "Use the OpenSSL 1.1 API" OFF)
+option(CIVETWEB_SSL_OPENSSL_API_1_1 "Use the OpenSSL 1.1 API" ON)
 message(STATUS "Compile for OpenSSL 1.1 API - ${CIVETWEB_SSL_OPENSSL_API_1_1}")
 
 # Dynamically load or link the SSL libraries
@@ -223,6 +233,16 @@ cmake_dependent_option(
   CIVETWEB_ENABLE_SSL OFF)
 if (CIVETWEB_ENABLE_SSL)
   message(STATUS "Dynamically load SSL libraries - ${CIVETWEB_ENABLE_SSL_DYNAMIC_LOADING}")
+endif()
+
+# Link time optimization
+option(CIVETWEB_ENABLE_LTO "Enable link time optimization" OFF)
+if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
+    "${BUILD_SHARED_LIBS}" STREQUAL "SHARED" OR
+    ${CMAKE_CXX_COMPILER_VERSION} GREATER 5)
+  option(CIVETWEB_CXX_ENABLE_LTO "Enable link time optimization for the C++ wrapper library" ON)
+else()
+  option(CIVETWEB_CXX_ENABLE_LTO "Enable link time optimization for the C++ wrapper library" OFF)
 endif()
 
 # Third Party Download location
@@ -284,27 +304,6 @@ else()
   add_c_compiler_flag(-std=${CIVETWEB_C_STANDARD})
 endif()
 
-#Warnings: enable everything
-add_c_compiler_flag(-Wall)
-add_c_compiler_flag(-Wextra)
-add_c_compiler_flag(-Wshadow)
-add_c_compiler_flag(-Wconversion)
-add_c_compiler_flag(-Wmissing-prototypes)
-add_c_compiler_flag(-Weverything)
-add_c_compiler_flag(-Wparentheses)
-add_c_compiler_flag(/W4) # VisualStudio highest warning level
-
-#Warnings: Disable some warnings
-add_c_compiler_flag(-Wno-padded) # padding in structures by compiler
-add_c_compiler_flag(-Wno-unused-macros) # so what?
-Check_C_Compiler_Flag( HAVE_NO_RESERVED_ID_MACROS -Wno-reserved-id-macros)
-if (HAVE_NO_RESERVED_ID_MACROS)
-add_c_compiler_flag(-Wno-reserved-id-macros) # for system headers
-endif (HAVE_NO_RESERVED_ID_MACROS)
-add_c_compiler_flag(-Wno-format-nonliteral) # printf(myFormatStringVar, ...)
-add_c_compiler_flag(-Wno-cast-qual) # const cast
-add_c_compiler_flag(/Wd4820) # padding
-
 if (MINGW)
   add_c_compiler_flag(-Wno-format)
 endif()
@@ -312,10 +311,9 @@ if (NOT CIVETWEB_ALLOW_WARNINGS)
   add_c_compiler_flag(-Werror)
   add_c_compiler_flag(/WX)
 endif()
-add_c_compiler_flag(-pedantic-errors)
-add_c_compiler_flag(-fvisibility=hidden)
-add_c_compiler_flag(-fstack-protector-strong RELEASE)
-#add_c_compiler_flag(-flto RELEASE)
+if (${CIVETWEB_ENABLE_LTO})
+  add_c_compiler_flag(-flto RELEASE)
+endif()
 if (${CIVETWEB_ENABLE_ASAN})
 add_c_compiler_flag(-fsanitize=undefined DEBUG)
 add_c_compiler_flag(-fsanitize=address DEBUG)
@@ -323,7 +321,6 @@ if (HAVE_C_FLAG_FSANITIZE_ADDRESS)
   add_c_compiler_flag(-static-asan DEBUG)
 endif()
 endif()
-add_c_compiler_flag(-fstack-protector-all DEBUG)
 if (MINGW)
   add_c_compiler_flag(-mwindows)
 endif()
@@ -385,9 +382,7 @@ if (CIVETWEB_ENABLE_CXX)
   add_cxx_compiler_flag(-fvisibility=hidden)
   add_cxx_compiler_flag(-fstack-protector-strong RELEASE)
 
-  if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
-      "${BUILD_SHARED_LIBS}" STREQUAL "SHARED" OR
-      ${CMAKE_CXX_COMPILER_VERSION} GREATER 5)
+  if (${CIVETWEB_CXX_ENABLE_LTO})
     add_cxx_compiler_flag(-flto RELEASE)
   endif()
   if (${CIVETWEB_ENABLE_ASAN})
@@ -407,9 +402,85 @@ if (CIVETWEB_ENABLE_CXX)
   add_cxx_compiler_flag(--coverage COVERAGE)
 endif()
 
+if (NOT ZEPHYR)
+  #Warnings: enable everything
+  add_c_compiler_flag(-Wall)
+  add_c_compiler_flag(-Wextra)
+  add_c_compiler_flag(-Wshadow)
+  add_c_compiler_flag(-Wconversion)
+  add_c_compiler_flag(-Wmissing-prototypes)
+  add_c_compiler_flag(-Weverything)
+  add_c_compiler_flag(-Wparentheses)
+  add_c_compiler_flag(/W4) # VisualStudio highest warning level
+
+  #Warnings: Disable some warnings
+  add_c_compiler_flag(-Wno-padded) # padding in structures by compiler
+  add_c_compiler_flag(-Wno-unused-macros) # so what?
+  Check_C_Compiler_Flag( HAVE_NO_RESERVED_ID_MACROS -Wno-reserved-id-macros)
+  if (HAVE_NO_RESERVED_ID_MACROS)
+  add_c_compiler_flag(-Wno-reserved-id-macros) # for system headers
+  endif (HAVE_NO_RESERVED_ID_MACROS)
+  add_c_compiler_flag(-Wno-format-nonliteral) # printf(myFormatStringVar, ...)
+  add_c_compiler_flag(-Wno-cast-qual) # const cast
+  add_c_compiler_flag(/Wd4820) # padding
+
+  add_c_compiler_flag(-pedantic-errors)
+  add_c_compiler_flag(-fvisibility=hidden)
+  add_c_compiler_flag(-fstack-protector-strong RELEASE)
+  add_c_compiler_flag(-fstack-protector-all DEBUG)
+else()
+  # This policy is needed to override options with variables
+  cmake_policy(SET CMP0077 NEW)
+
+  # Configure what you need/support in Zephyr
+  set(CIVETWEB_SERVE_NO_FILES ON)
+  set(CIVETWEB_SERVE_NO_FILESYSTEMS ON)
+  set(CIVETWEB_DISABLE_CGI ON)
+  set(CIVETWEB_DISABLE_CACHING ON)
+  set(CIVETWEB_ENABLE_SSL OFF)
+  set(CIVETWEB_ENABLE_SSL_DYNAMIC_LOADING OFF)
+
+  set(CIVETWEB_ENABLE_LUA OFF)
+  set(CIVETWEB_ENABLE_DUKTAPE OFF)
+  set(CIVETWEB_ENABLE_MEMORY_DEBUGGING OFF)
+  set(CIVETWEB_ENABLE_SERVER_EXECUTABLE OFF)
+  set(CIVETWEB_ENABLE_ASAN OFF)
+  set(CIVETWEB_INSTALL_EXECUTABLE OFF)
+
+  set(CIVETWEB_THREAD_STACK_SIZE 0)
+
+  set(BUILD_SHARED_LIBS OFF)
+
+  add_definitions(-DMG_EXTERNAL_FUNCTION_mg_cry_internal_impl)
+  add_definitions(-DMG_EXTERNAL_FUNCTION_log_access)
+
+  add_definitions(-DNO_ALTERNATIVE_QUEUE)
+  add_definitions(-DZEPHYR_VERSION=${KERNEL_VERSION_STRING})
+
+  zephyr_interface_library_named(CIVETWEB)
+
+  target_include_directories(CIVETWEB INTERFACE src)
+  target_include_directories(CIVETWEB INTERFACE include)
+  target_include_directories(CIVETWEB INTERFACE ${CMAKE_SOURCE_DIR}/src)
+
+  zephyr_include_directories(include)
+
+  zephyr_library()
+  zephyr_library_sources(
+    src/civetweb.c
+  )
+
+  zephyr_library_link_libraries(CIVETWEB)
+  target_link_libraries(CIVETWEB INTERFACE zephyr_interface)
+endif()
+
+
 # Set up the definitions
+option(CIVETWEB_ENABLE_DEBUG_TOOLS "For Debug builds enable verbose logging and assertions" ON)
 if (${CMAKE_BUILD_TYPE} MATCHES "[Dd]ebug")
-  add_definitions(-DDEBUG)
+  if(CIVETWEB_ENABLE_DEBUG_TOOLS)
+    add_definitions(-DDEBUG)
+  endif()
   add_definitions(-O0)
   add_definitions(-g)
 endif()
@@ -424,6 +495,9 @@ if (CIVETWEB_ENABLE_SERVER_STATS)
 endif()
 if (CIVETWEB_SERVE_NO_FILES)
   add_definitions(-DNO_FILES)
+endif()
+if (CIVETWEB_SERVE_NO_FILESYSTEMS)
+  add_definitions(-DNO_FILESYSTEMS)
 endif()
 if (CIVETWEB_DISABLE_CGI)
   add_definitions(-DNO_CGI)
@@ -452,9 +526,17 @@ else()
     add_definitions(-DCRYPTO_LIB="${CIVETWEB_SSL_CRYPTO_LIB}")
   endif()
 endif()
+
+if(CIVETWEB_SSL_OPENSSL_API_1_0)
+  add_definitions(-DOPENSSL_API_1_0)
+endif()
 if(CIVETWEB_SSL_OPENSSL_API_1_1)
   add_definitions(-DOPENSSL_API_1_1)
 endif()
+if(CIVETWEB_SSL_OPENSSL_API_1_0 AND CIVETWEB_SSL_OPENSSL_API_1_1)
+  message(FATAL_ERROR "Multiple SSL API versions defined")
+endif()
+
 add_definitions(-DUSE_STACK_SIZE=${CIVETWEB_THREAD_STACK_SIZE})
 
 # Set 32 or 64 bit environment
@@ -465,6 +547,10 @@ if (${CMAKE_ARCH} MATCHES "[Xx]64")
 add_c_compiler_flag(-m64)
 endif()
 # TODO: add support for -march
+
+if (ZEPHYR)
+  return()
+endif()
 
 # Build the targets
 add_subdirectory(src)
@@ -520,6 +606,9 @@ install(
   FILES
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config-version.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindLibDl.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindLibRt.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindWinSock.cmake"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
   COMPONENT civetweb-cmake-config
 )

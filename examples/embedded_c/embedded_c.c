@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2013-2017 the CivetWeb developers
+ * Copyright (c) 2013-2020 the CivetWeb developers
  * Copyright (c) 2013 No Face Press, LLC
  * License http://opensource.org/licenses/mit-license.php MIT License
  */
 
 #ifdef NO_SSL
 #define TEST_WITHOUT_SSL
+#undef USE_SSL_DH
 #endif
 
 /* Simple example program on how to use CivetWeb embedded into a C program. */
@@ -44,7 +45,7 @@
 
 #define EXAMPLE_URI "/example"
 #define EXIT_URI "/exit"
-int exitNow = 0;
+volatile int exitNow = 0;
 
 
 int
@@ -130,7 +131,7 @@ AHandler(struct mg_connection *conn, void *cbdata)
 	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
 	          "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
-	mg_printf(conn, "<h2>This is the A handler!!!</h2>");
+	mg_printf(conn, "<h2>This is the A handler.</h2>");
 	mg_printf(conn, "</body></html>\n");
 	return 1;
 }
@@ -139,11 +140,39 @@ AHandler(struct mg_connection *conn, void *cbdata)
 int
 ABHandler(struct mg_connection *conn, void *cbdata)
 {
+	const struct mg_request_info *ri = mg_get_request_info(conn);
+
 	mg_printf(conn,
 	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
 	          "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
-	mg_printf(conn, "<h2>This is the AB handler!!!</h2>");
+
+	mg_printf(conn, "<h2>This is the AB handler.</h2>");
+
+	mg_printf(conn, "<ul>\n");
+	mg_printf(conn, "<li>request_method = %s</li>\n", ri->request_method);
+	mg_printf(conn, "<li>request_uri = %s</li>\n", ri->request_uri);
+	mg_printf(conn, "<li>local_uri = %s</li>\n", ri->local_uri);
+	mg_printf(conn, "<li>http_version = %s</li>\n", ri->http_version);
+	mg_printf(conn, "<li>query_string = %s</li>\n", ri->query_string);
+	mg_printf(conn, "<li>remote_user = %s</li>\n", ri->remote_user);
+	mg_printf(conn, "<li>remote_addr = %s</li>\n", ri->remote_addr);
+	mg_printf(conn, "<li>remote_port = %u</li>\n", ri->remote_port);
+	mg_printf(conn, "<li>is_ssl = %i</li>\n", ri->is_ssl);
+	mg_printf(conn, "<li>num_headers = %i</li>\n", ri->num_headers);
+	if (ri->num_headers > 0) {
+		int i;
+		mg_printf(conn, "<ol>\n");
+		for (i = 0; i < ri->num_headers; i++) {
+			mg_printf(conn,
+			          "<li>%s = %s</li>\n",
+			          ri->http_headers[i].name,
+			          ri->http_headers[i].value);
+		}
+		mg_printf(conn, "</ol>\n");
+	}
+	mg_printf(conn, "</ul>\n");
+
 	mg_printf(conn, "</body></html>\n");
 	return 1;
 }
@@ -154,14 +183,13 @@ BXHandler(struct mg_connection *conn, void *cbdata)
 {
 	/* Handler may access the request info using mg_get_request_info */
 	const struct mg_request_info *req_info = mg_get_request_info(conn);
+	const char *text = (const char *)cbdata;
 
 	mg_printf(conn,
 	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
 	          "close\r\n\r\n");
 	mg_printf(conn, "<html><body>");
-	mg_printf(conn,
-	          "<h2>This is the BX handler with argument %s.</h2>",
-	          cbdata);
+	mg_printf(conn, "<h2>This is the BX handler with argument %s.</h2>", text);
 	mg_printf(conn, "<p>The actual uri is %s</p>", req_info->local_uri);
 	mg_printf(conn, "</body></html>\n");
 	return 1;
@@ -220,6 +248,7 @@ CloseHandler(struct mg_connection *conn, void *cbdata)
 }
 
 
+#if !defined(NO_FILESYSTEMS)
 int
 FileHandler(struct mg_connection *conn, void *cbdata)
 {
@@ -229,6 +258,7 @@ FileHandler(struct mg_connection *conn, void *cbdata)
 	mg_send_file(conn, fileName);
 	return 1;
 }
+#endif /* NO_FILESYSTEMS */
 
 
 #define MD5_STATIC static
@@ -266,7 +296,7 @@ field_found(const char *key,
 #else
 		snprintf(path, pathlen, "/tmp/%s", filename);
 #endif
-		return MG_FORM_FIELD_STORAGE_GET;
+		return MG_FORM_FIELD_STORAGE_STORE;
 	}
 	return MG_FORM_FIELD_STORAGE_GET;
 }
@@ -289,7 +319,7 @@ field_get(const char *key, const char *value, size_t valuelen, void *user_data)
 	if (key) {
 		mg_printf(conn, "key = %s\n", key);
 	}
-	mg_printf(conn, "valuelen = %u\n", valuelen);
+	mg_printf(conn, "valuelen = %lu\n", valuelen);
 
 	if (valuelen > 0) {
 		/* mg_write(conn, value, valuelen); */
@@ -585,6 +615,7 @@ PostResponser(struct mg_connection *conn, void *cbdata)
 }
 
 
+#if !defined(NO_FILESYSTEMS)
 int
 AuthStartHandler(struct mg_connection *conn, void *cbdata)
 {
@@ -653,6 +684,7 @@ AuthStartHandler(struct mg_connection *conn, void *cbdata)
 
 	return 1;
 }
+#endif /* NO_FILESYSTEMS */
 
 
 int
@@ -713,7 +745,24 @@ WebSocketStartHandler(struct mg_connection *conn, void *cbdata)
 #define MAX_WS_CLIENTS (5)
 
 struct t_ws_client {
+	/* Handle to the connection, used for mg_read/mg_write */
 	struct mg_connection *conn;
+
+	/*
+	    WebSocketConnectHandler sets state to 1 ("connected")
+	    the connect handler can accept or reject a connection, but it cannot
+	    send or receive any data at this state
+
+	    WebSocketReadyHandler sets state to 2 ("ready")
+	    reading and writing is possible now
+
+	    WebSocketCloseHandler sets state to 0
+	    the websocket is about to be closed, reading and writing is no longer
+	    possible this callback can be used to cleanup allocated resources
+
+	    InformWebsockets is called cyclic every second, and sends some data
+	    (a counter value) to all websockets in state 2
+	*/
 	int state;
 } static ws_clients[MAX_WS_CLIENTS];
 
@@ -822,6 +871,16 @@ WebSocketCloseHandler(const struct mg_connection *conn, void *cbdata)
 	ASSERT(client->state >= 1);
 
 	mg_lock_context(ctx);
+	while (client->state == 3) {
+		/* "inform" state, wait a while */
+		mg_unlock_context(ctx);
+#ifdef _WIN32
+		Sleep(1);
+#else
+		usleep(1000);
+#endif
+		mg_lock_context(ctx);
+	}
 	client->state = 0;
 	client->conn = NULL;
 	mg_unlock_context(ctx);
@@ -842,16 +901,27 @@ InformWebsockets(struct mg_context *ctx)
 	sprintf(text, "%lu", ++cnt);
 	textlen = strlen(text);
 
-	mg_lock_context(ctx);
 	for (i = 0; i < MAX_WS_CLIENTS; i++) {
+		int inform = 0;
+
+		mg_lock_context(ctx);
 		if (ws_clients[i].state == 2) {
+			/* move to "inform" state */
+			ws_clients[i].state = 3;
+			inform = 1;
+		}
+		mg_unlock_context(ctx);
+
+		if (inform) {
 			mg_websocket_write(ws_clients[i].conn,
 			                   MG_WEBSOCKET_OPCODE_TEXT,
 			                   text,
 			                   textlen);
+			mg_lock_context(ctx);
+			ws_clients[i].state = 2;
+			mg_unlock_context(ctx);
 		}
 	}
-	mg_unlock_context(ctx);
 }
 #endif
 
@@ -912,10 +982,10 @@ get_dh2236()
 
 #ifndef TEST_WITHOUT_SSL
 int
-init_ssl(void *ssl_context, void *user_data)
+init_ssl(void *ssl_ctx, void *user_data)
 {
 	/* Add application specific SSL initialization */
-	struct ssl_ctx_st *ctx = (struct ssl_ctx_st *)ssl_context;
+	struct ssl_ctx_st *ctx = (struct ssl_ctx_st *)ssl_ctx;
 
 #ifdef USE_SSL_DH
 	/* example from https://github.com/civetweb/civetweb/issues/347 */
@@ -952,33 +1022,36 @@ int
 main(int argc, char *argv[])
 {
 	const char *options[] = {
-	    "document_root",
-	    DOCUMENT_ROOT,
-	    "listening_ports",
-	    PORT,
-	    "request_timeout_ms",
-	    "10000",
-	    "error_log_file",
-	    "error.log",
+#if !defined(NO_FILES)
+		"document_root",
+		DOCUMENT_ROOT,
+#endif
+		"listening_ports",
+		PORT,
+		"request_timeout_ms",
+		"10000",
+		"error_log_file",
+		"error.log",
 #ifdef USE_WEBSOCKET
-	    "websocket_timeout_ms",
-	    "3600000",
+		"websocket_timeout_ms",
+		"3600000",
 #endif
 #ifndef TEST_WITHOUT_SSL
-	    "ssl_certificate",
-	    "../../resources/cert/server.pem",
-	    "ssl_protocol_version",
-	    "3",
-	    "ssl_cipher_list",
+		"ssl_certificate",
+		"../../resources/cert/server.pem",
+		"ssl_protocol_version",
+		"3",
+		"ssl_cipher_list",
 #ifdef USE_SSL_DH
-	    "ECDHE-RSA-AES256-GCM-SHA384:DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256",
+		"ECDHE-RSA-AES256-GCM-SHA384:DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256",
 #else
-	    "DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256",
+		"DES-CBC3-SHA:AES128-SHA:AES128-GCM-SHA256",
 #endif
 #endif
-	    "enable_auth_domain_check",
-	    "no",
-	    0};
+		"enable_auth_domain_check",
+		"no",
+		0
+	};
 	struct mg_callbacks callbacks;
 	struct mg_context *ctx;
 	struct mg_server_port ports[32];
@@ -1048,11 +1121,13 @@ main(int argc, char *argv[])
 	/* Add handler for /close extension */
 	mg_set_request_handler(ctx, "/close", CloseHandler, 0);
 
+#if !defined(NO_FILESYSTEMS)
 	/* Add handler for /form  (serve a file outside the document root) */
 	mg_set_request_handler(ctx,
 	                       "/form",
 	                       FileHandler,
 	                       (void *)"../../test/form.html");
+#endif /* NO_FILESYSTEMS */
 
 	/* Add handler for form data */
 	mg_set_request_handler(ctx,
@@ -1079,8 +1154,10 @@ main(int argc, char *argv[])
 	/* Add HTTP site to open a websocket connection */
 	mg_set_request_handler(ctx, "/websocket", WebSocketStartHandler, 0);
 
+#if !defined(NO_FILESYSTEMS)
 	/* Add HTTP site with auth */
 	mg_set_request_handler(ctx, "/auth", AuthStartHandler, 0);
+#endif /* NO_FILESYSTEMS */
 
 
 #ifdef USE_WEBSOCKET

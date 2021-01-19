@@ -50,7 +50,7 @@ before_script:
   - uname -a
   - if [ "${TRAVIS_OS_NAME}" == "linux" ]; then
       lsb_release -a;
-      cat /etc/network/interfaces;
+      cat /etc/network/interfaces || true;
     fi
   - ifconfig
   - pwd
@@ -62,9 +62,36 @@ before_script:
   - if [[ "${BUILD_TYPE}" == "OSX_OPENSSL_1_1" ]]; then HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl@1.1 ;fi
   # Generate the build scripts with CMake
   - mkdir output
+  - openssl version
+  - gcc --version
+  - cmake --version
   - gcc unittest/cgi_test.c -o output/cgi_test.cgi
   - cd output
-  - cmake --version
+  - echo cmake
+    -G "Unix Makefiles"
+    -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
+    -DBUILD_SHARED_LIBS=${BUILD_SHARED}
+    "-DCIVETWEB_THIRD_PARTY_DIR=${HOME}/third-party"
+    -DCIVETWEB_ENABLE_THIRD_PARTY_OUTPUT=YES
+    -DCIVETWEB_ENABLE_SSL=${ENABLE_SSL}
+    -DCIVETWEB_DISABLE_CGI=${NO_CGI}
+    -DCIVETWEB_SERVE_NO_FILES=${NO_FILES}
+    -DCIVETWEB_ENABLE_SSL_DYNAMIC_LOADING=${ENABLE_SSL_DYNAMIC_LOADING}
+    -DCIVETWEB_SSL_OPENSSL_API_1_0=${OPENSSL_1_0}
+    -DCIVETWEB_SSL_OPENSSL_API_1_1=${OPENSSL_1_1}
+    -DCIVETWEB_ENABLE_WEBSOCKETS=${ENABLE_WEBSOCKETS}
+    -DCIVETWEB_ENABLE_CXX=${ENABLE_CXX}
+    -DCIVETWEB_ENABLE_SERVER_STATS=${ENABLE_SERVER_STATS}
+    -DCIVETWEB_ENABLE_LUA=${ENABLE_LUA}
+    -DCIVETWEB_ENABLE_LUA_SHARED=${ENABLE_LUA_SHARED}
+    -DCIVETWEB_ENABLE_DUKTAPE=${ENABLE_DUKTAPE}
+    -DCIVETWEB_DISABLE_CACHING=${NO_CACHING}
+    -DCIVETWEB_C_STANDARD=${C_STANDARD}
+    -DCIVETWEB_CXX_STANDARD=${CXX_STANDARD}
+    -DCIVETWEB_ALLOW_WARNINGS=${ALLOW_WARNINGS}
+    -DCIVETWEB_ENABLE_IPV6=${ENABLE_IPV6}
+    ${ADDITIONAL_CMAKE_ARGS}
+    ..
   - cmake
     -G "Unix Makefiles"
     -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
@@ -75,6 +102,7 @@ before_script:
     -DCIVETWEB_DISABLE_CGI=${NO_CGI}
     -DCIVETWEB_SERVE_NO_FILES=${NO_FILES}
     -DCIVETWEB_ENABLE_SSL_DYNAMIC_LOADING=${ENABLE_SSL_DYNAMIC_LOADING}
+    -DCIVETWEB_SSL_OPENSSL_API_1_0=${OPENSSL_1_0}
     -DCIVETWEB_SSL_OPENSSL_API_1_1=${OPENSSL_1_1}
     -DCIVETWEB_ENABLE_WEBSOCKETS=${ENABLE_WEBSOCKETS}
     -DCIVETWEB_ENABLE_CXX=${ENABLE_CXX}
@@ -180,12 +208,12 @@ matrix:
       MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
       BUILD_TYPE=Debug
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=NO
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=0
       BUILD_SHARED=NO
       NO_FILES=YES
       ENABLE_SSL=NO
@@ -215,12 +243,12 @@ matrix:
       MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -251,12 +279,12 @@ matrix:
       MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -286,12 +314,12 @@ matrix:
       MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -321,12 +349,12 @@ matrix:
       MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -347,12 +375,12 @@ matrix:
       N=GCCAnyVersion-Linux-Coverage
       BUILD_TYPE=Coverage
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -373,12 +401,12 @@ matrix:
       N=Clang-OSX-Complete-NoLua-Release
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -400,12 +428,12 @@ matrix:
       N=Clang-OSX-Complete-NoLua-Release-OpenSSL_1_1_NoDynLoad
       BUILD_TYPE=OSX_OPENSSL_1_1
       ENABLE_SSL_DYNAMIC_LOADING=NO
+      OPENSSL_1_0=NO
       OPENSSL_1_1=YES
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -440,12 +468,12 @@ matrix:
       N=Clang50-Linux-Default-Shared
       BUILD_TYPE=Debug
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=YES
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -457,7 +485,7 @@ matrix:
       ENABLE_DUKTAPE=NO
       NO_CACHING=NO
       ALLOW_WARNINGS=YES
-      MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
+      MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
 
   -
     os: linux
@@ -469,12 +497,12 @@ matrix:
       N=Precise-Clang-Linux-Default
       BUILD_TYPE=Debug
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -496,12 +524,12 @@ matrix:
       N=OSX-Package
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -532,12 +560,12 @@ matrix:
       ARCH=x86
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -565,12 +593,12 @@ matrix:
       N=NoSslDynamicLoading
       BUILD_TYPE=Release
       ENABLE_SSL_DYNAMIC_LOADING=NO
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
       ENABLE_LUA_SHARED=NO
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -591,12 +619,12 @@ matrix:
       N=GCCLinuxDefault_Debug
       BUILD_TYPE=Debug
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -616,12 +644,12 @@ matrix:
       N=GCCLinuxDefault_RelWithDebInfo
       BUILD_TYPE=RelWithDebInfo
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -641,12 +669,12 @@ matrix:
       N=GCCLinuxDefault_MinSizeRel
       BUILD_TYPE=MinSizeRel
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -666,12 +694,12 @@ matrix:
       N=GCCLinuxDefault_None
       BUILD_TYPE=None
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=NO
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=7
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -692,12 +720,12 @@ matrix:
       MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
       BUILD_TYPE=Debug
       ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
       OPENSSL_1_1=NO
       ENABLE_CXX=NO
       ENABLE_LUA_SHARED=YES
       C_STANDARD=auto
       CXX_STANDARD=auto
-      FEATURES=31
       BUILD_SHARED=NO
       NO_FILES=NO
       ENABLE_SSL=YES
@@ -708,6 +736,149 @@ matrix:
       ENABLE_LUA=NO
       ENABLE_DUKTAPE=NO
       NO_CACHING=YES
+      ALLOW_WARNINGS=YES
+
+  - dist: trusty
+    sudo: false
+    os: linux
+    compiler: clang
+    addons:
+      apt:
+        sources:
+          - ubuntu-toolchain-r-test
+          - llvm-toolchain-trusty-5.0
+        packages:
+          - clang-5.0
+    env:
+      idx=19
+      N=Clang5.0-Linux-Complete-CXX-NoLua-Release
+      MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
+      BUILD_TYPE=Release
+      ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
+      OPENSSL_1_1=NO
+      ENABLE_CXX=YES
+      ENABLE_LUA_SHARED=YES
+      C_STANDARD=auto
+      CXX_STANDARD=auto
+      BUILD_SHARED=NO
+      NO_FILES=NO
+      ENABLE_SSL=YES
+      NO_CGI=NO
+      ENABLE_IPV6=YES
+      ENABLE_WEBSOCKETS=YES
+      ENABLE_SERVER_STATS=YES
+      ENABLE_LUA=NO
+      ENABLE_DUKTAPE=NO
+      NO_CACHING=NO
+      ALLOW_WARNINGS=YES
+
+  -
+    os: linux
+    compiler: gcc
+    dist: xenial
+    env:
+      idx=20
+      N=GCCLinuxDefault_xenial
+      BUILD_TYPE=Release
+      ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=YES
+      OPENSSL_1_1=NO
+      ENABLE_CXX=NO
+      ENABLE_LUA_SHARED=NO
+      C_STANDARD=auto
+      CXX_STANDARD=auto
+      BUILD_SHARED=NO
+      NO_FILES=NO
+      ENABLE_SSL=YES
+      NO_CGI=NO
+      ENABLE_IPV6=NO
+      ENABLE_WEBSOCKETS=NO
+      ENABLE_LUA=NO
+      ENABLE_DUKTAPE=NO
+      NO_CACHING=NO
+      ALLOW_WARNINGS=YES
+
+  -
+    os: linux
+    compiler: gcc
+    dist: bionic
+    env:
+      idx=21
+      N=GCCLinuxDefault_bionic
+      BUILD_TYPE=Release
+      ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=NO
+      OPENSSL_1_1=YES
+      ENABLE_CXX=NO
+      ENABLE_LUA_SHARED=NO
+      C_STANDARD=auto
+      CXX_STANDARD=auto
+      BUILD_SHARED=NO
+      NO_FILES=NO
+      ENABLE_SSL=YES
+      NO_CGI=NO
+      ENABLE_IPV6=NO
+      ENABLE_WEBSOCKETS=NO
+      ENABLE_LUA=NO
+      ENABLE_DUKTAPE=NO
+      NO_CACHING=NO
+      ALLOW_WARNINGS=YES
+
+  -
+    os: linux
+    compiler: gcc
+    dist: eoan
+    env:
+      idx=22
+      N=GCCLinuxDefault_eoan
+      BUILD_TYPE=Release
+      ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=NO
+      OPENSSL_1_1=YES
+      ENABLE_CXX=NO
+      ENABLE_LUA_SHARED=NO
+      C_STANDARD=auto
+      CXX_STANDARD=auto
+      BUILD_SHARED=NO
+      NO_FILES=NO
+      ENABLE_SSL=YES
+      NO_CGI=NO
+      ENABLE_IPV6=NO
+      ENABLE_WEBSOCKETS=NO
+      ENABLE_LUA=NO
+      ENABLE_DUKTAPE=NO
+      NO_CACHING=NO
+      ALLOW_WARNINGS=YES
+
+  -
+    os: linux
+    compiler: gcc
+    dist: focal
+    addons:
+      apt:
+        packages:
+          - lsb-core
+    env:
+      idx=23
+      N=GCCLinuxDefault_focal
+      BUILD_TYPE=Release
+      ENABLE_SSL_DYNAMIC_LOADING=YES
+      OPENSSL_1_0=NO
+      OPENSSL_1_1=YES
+      ENABLE_CXX=NO
+      ENABLE_LUA_SHARED=NO
+      C_STANDARD=auto
+      CXX_STANDARD=auto
+      BUILD_SHARED=NO
+      NO_FILES=NO
+      ENABLE_SSL=YES
+      NO_CGI=NO
+      ENABLE_IPV6=NO
+      ENABLE_WEBSOCKETS=NO
+      ENABLE_LUA=NO
+      ENABLE_DUKTAPE=NO
+      NO_CACHING=NO
       ALLOW_WARNINGS=YES
 
   - <<: *conan-linux
@@ -756,17 +927,17 @@ matrix:
 #          - clang-3.8
 #          - lua5.2
 #    env:
-#      idx=19
+#      idx=99
 #      N=Clang3.8-Linux-Complete-WithLua-Debug
 #      MATRIX_EVAL="CC=clang-3.8 && CXX=clang++-3.8"
 #      BUILD_TYPE=Debug
 #      ENABLE_SSL_DYNAMIC_LOADING=YES
-#      OPENSSL_1_1=NO
+#      OPENSSL_1_0=NO
+#      OPENSSL_1_1=YES
 #      ENABLE_CXX=NO
 #      ENABLE_LUA_SHARED=YES
 #      C_STANDARD=auto
 #      CXX_STANDARD=auto
-#      FEATURES=63
 #      BUILD_SHARED=NO
 #      NO_FILES=NO
 #      ENABLE_SSL=YES
@@ -775,6 +946,7 @@ matrix:
 #      ENABLE_WEBSOCKETS=YES
 #      ENABLE_SERVER_STATS=YES
 #      ENABLE_LUA=YES
+#      ENABLE_LUA_SHARED=YES
 #      ENABLE_DUKTAPE=NO
 #      NO_CACHING=YES
 #      ALLOW_WARNINGS=YES
