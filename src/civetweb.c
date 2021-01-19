@@ -4769,12 +4769,10 @@ send_additional_header(struct mg_connection *conn)
 	}
 
     if (conn->additional_header && conn->additional_header[0]) {
-        i += mg_printf(conn, "%s\r\n", conn->additional_header);
+        mg_response_header_add_lines(conn, conn->additional_header);
         mg_free((void *)conn->additional_header);
         conn->additional_header = NULL;
     }
-
-	return i;
 }
 
 
@@ -17356,11 +17354,6 @@ close_connection(struct mg_connection *conn)
 		close_socket_gracefully(conn);
 #endif
 		conn->client.sock = INVALID_SOCKET;
-	}
-
-	if (conn->host) {
-		mg_free((void *)conn->host);
-		conn->host = NULL;
 	}
 
     if (conn->additional_header) {
